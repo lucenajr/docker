@@ -268,3 +268,121 @@ ENTRYPOINT ["./server"]
   ```bash
   docker run --entrypoint /bin/sh my-go-app
   ```
+
+```markdown
+# Resumo do Capítulo
+
+## 1. Introdução ao Docker Networking
+
+O Docker oferece um sistema de redes completo para conectar containers entre si e com o mundo externo. Compreender o funcionamento dessas redes é fundamental para o desenvolvimento de aplicações distribuídas e escaláveis.
+
+---
+
+## 2. Conceitos Básicos de Rede no Docker
+
+### Tipos de Redes no Docker
+
+- **Bridge (Ponte)**:
+  - Rede padrão para containers independentes.
+  - Permite isolamento entre containers e o host.
+  - Comunicação entre containers pelo nome, em redes bridge personalizadas.
+
+- **Host**:
+  - O container compartilha a interface de rede do host.
+  - Indicado para casos de alto desempenho ou portas privilegiadas.
+  - Limitações no macOS e Windows; o modo bridge é mais compatível no Docker Desktop.
+
+### Como os Containers se Conectam às Redes
+
+- **Interfaces Virtuais**: Cada container possui uma interface virtual.
+- **Endereços IP**: Containers recebem IPs privados dentro da rede configurada.
+- **Resolução de Nomes**: Docker configura DNS interno para redes bridge personalizadas.
+
+---
+
+## 3. Comunicação entre Containers na Mesma Rede
+
+### Exemplo Prático: Aplicação Node.js e MongoDB
+
+#### Passos:
+1. **Preparar a Aplicação Node.js**:
+   - A aplicação conecta ao MongoDB no host `db` e porta `27017`.
+
+2. **Criar Dockerfile e .dockerignore**:
+   - Configurações para construir a imagem da aplicação.
+
+3. **Construir e Configurar a Rede**:
+   - Criar uma rede bridge personalizada: `docker network create app-network`.
+
+4. **Iniciar Containers**:
+   - MongoDB: `docker run -d --name db --network app-network mongo:latest`.
+   - Node.js: `docker run -d --name app --network app-network mynode_app_network`.
+
+5. **Verificar Comunicação**:
+   - Logs da aplicação devem indicar sucesso: *Connected to MongoDB*.
+
+---
+
+## 4. Comunicação entre Containers e o Host
+
+### Utilizando `host.docker.internal`
+
+- **Descrição**: Resolve o IP do host para acesso a serviços.
+- **Linux**: Use `host-gateway` para resolver o IP do host.
+
+#### Exemplo:
+- Configurar um container para acessar uma aplicação Node.js rodando no host.
+
+```bash
+docker run -d --name nginx --add-host=host.docker.internal:host-gateway nginx
+```
+
+- Testar conexão com `curl http://host.docker.internal:3000`.
+
+---
+
+## 5. Gerenciando Múltiplas Redes e Isolamento
+
+Containers podem ser conectados a várias redes, permitindo comunicação seletiva.
+
+### Exemplo Prático:
+
+1. **Criar Redes**:
+   - `docker network create backend-net`.
+   - `docker network create db-net`.
+
+2. **Iniciar Containers**:
+   - MongoDB: `db-net`.
+   - Aplicação Node.js: `backend-net`.
+
+3. **Conectar Redes**:
+   - `docker network connect db-net app`.
+
+4. **Resultados**:
+   - Inicialmente, sem conexão entre redes.
+   - Após conectar, comunicação estabelecida.
+
+---
+
+## 6. Modos de Rede: Bridge vs. Host
+
+### Modo Bridge
+
+- **Vantagens**:
+  - Isolamento entre containers e do host.
+  - Compatível com todos os sistemas operacionais.
+
+### Modo Host
+
+- **Vantagens**:
+  - Melhora desempenho para casos específicos.
+  - Não exige mapeamento de portas.
+
+- **Considerações**:
+  - Menos seguro devido à falta de isolamento.
+  - Limitado no Docker Desktop para macOS/Windows.
+
+---
+
+Este capítulo fornece uma base sólida para o uso de redes no Docker, abordando desde configurações básicas até práticas avançadas de gerenciamento e segurança.
+```
