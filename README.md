@@ -686,4 +686,303 @@ networks:
   backend:
   frontend:
 ```
+
+
+```markdown
+# Resumo do Capítulo
+
+## 1. O que é o `docker init`
+
+O `docker init` é um comando introduzido para simplificar a criação de arquivos `Dockerfile` e `docker-compose.yml` em projetos que ainda não os possuem. Ele analisa o código-fonte do seu projeto e gera automaticamente templates otimizados, facilitando o processo de containerização de aplicações.
+
+### Principais benefícios:
+
+- **Automação**: Gera arquivos de configuração Docker automaticamente.
+- **Boas práticas**: Os templates seguem as melhores práticas recomendadas pela Docker.
+- **Otimizações**: Inclui otimizações de cache e suporte a builds multiplataforma.
+- **Flexibilidade**: Suporta várias linguagens e permite personalização posterior.
+
+### Como usar:
+
+Basta navegar até o diretório do seu projeto e executar:
+
+```bash
+docker init
+```
+
+O comando irá interagir com você para coletar informações sobre o projeto e, em seguida, gerar os arquivos necessários.
+
+---
+
+## 2. Projeto Go com `docker init`
+
+Vamos criar um projeto simples em Go e usar o `docker init` para gerar os arquivos de configuração.
+
+### Passo a Passo:
+
+1. **Crie um diretório para o projeto e navegue até ele:**
+
+    ```bash
+    mkdir my-go-app
+    cd my-go-app
+    ```
+
+2. **Inicie um módulo Go:**
+
+    ```bash
+    go mod init my-go-app
+    ```
+
+3. **Crie um arquivo `main.go`:**
+
+    ```go
+    package main
+
+    import (
+        "fmt"
+        "net/http"
+    )
+
+    func handler(w http.ResponseWriter, r *http.Request) {
+        fmt.Fprintf(w, "Hello, Docker!")
+    }
+
+    func main() {
+        http.HandleFunc("/", handler)
+        http.ListenAndServe(":8080", nil)
+    }
+    ```
+
+4. **Execute `docker init`:**
+
+    ```bash
+    docker init
+    ```
+
+    **Durante a interação:**
+    - `Select the application platform`: Go
+    - `Name of the service`: server (padrão)
+    - `Which port does your server application listen on?`: 8080
+    - `Would you like to include Compose files?`: Yes
+    - `Which version of Go do you want to use?`: (padrão ou escolha a versão desejada)
+
+---
+
+### Análise detalhada do Dockerfile Go
+
+```dockerfile
+# syntax=docker/dockerfile:1
+ARG GO_VERSION=1.23.1
+FROM --platform=$BUILDPLATFORM golang:${GO_VERSION} AS build
+WORKDIR /src
+RUN --mount=type=cache,target=/go/pkg/mod/ \
+    --mount=type=bind,source=go.mod,target=go.mod \
+    go mod download -x
+
+RUN --mount=type=cache,target=/go/pkg/mod/ \
+    --mount=type=bind,target=. \
+    CGO_ENABLED=0 GOARCH=$TARGETARCH go build -o /bin/server ./cmd/server
+
+FROM alpine:latest AS final
+RUN --mount=type=cache,target=/var/cache/apk \
+    apk --update add \
+        ca-certificates \
+        tzdata && \
+        update-ca-certificates
+ARG UID=10001
+RUN adduser \
+    --disabled-password \
+    --gecos "" \
+    --home "/nonexistent" \
+    --shell "/sbin/nologin" \
+    --no-create-home \
+    --uid "${UID}" \
+    appuser
+USER appuser
+COPY --from=build /bin/server /bin/
+EXPOSE 8080
+ENTRYPOINT [ "/bin/server" ]
+```
+
+**Principais pontos:**
+- Uso de *multi-stage builds* para gerar uma imagem final otimizada.
+- Cache e otimizações no processo de build.
+- Usuário não privilegiado para segurança.
+
+---
+
+### Análise do `compose.yaml` Go
+
+```yaml
+services:
+  server:
+    build:
+      context: .
+      target: final
+    ports:
+      - 8080:8080
+```
+
+- **`build`**: Configura o contexto e o alvo do build.
+- **`ports`**: Mapeia a porta 8080 do host para o container.
+
+---
+
+## 3. Projeto Node.js com `docker init`
+
+Agora, vamos criar um projeto simples em Node.js e usar o `docker init`.
+
+### Passo a Passo:
+
+1. **Crie um diretório para o projeto e navegue até ele:**
+
+    ```bash
+    mkdir my-node-app
+    cd my-node-app
+    ```
+
+2. **Inicie um projeto Node.js:**
+
+    ```bash
+    npm init -y
+    ```
+
+3. **Instale dependências necessárias (exemplo: express):**
+
+    ```bash
+    npm install express
+    ```
+
+4. **Crie um arquivo `index.js`:**
+
+    ```javascript
+    const express = require('express');
+    const app = express();
+
+    app.get('/', (req, res) => {
+      res.send('Hello, Docker!');
+    });
+
+    app.listen(3000, () => {
+      console.log('App listening on port 3000');
+    });
+    ```
+
+5. **Execute `docker init`:**
+
+    ```bash
+    docker init
+    ```
+
+    **Durante a interação:**
+    - `Select the application platform`: Node.js
+    - `Name of the service`: server (padrão)
+    - `Which port does your server application listen on?`: 3000
+    - `Would you like to include Compose files?`: Yes
+    - `Which version of Node.js do you want to use?`: (padrão ou escolha a versão desejada)
+
+---
+
+### Análise detalhada do Dockerfile Node.js
+
+```dockerfile
+# syntax=docker/dockerfile:1
+ARG NODE_VERSION=21.1.0
+FROM node:${NODE_VERSION}-alpine
+ENV NODE_ENV production
+WORKDIR /usr/src/app
+RUN --mount=type=bind,source=package.json,target=package.json \
+    --mount=type=bind,source=package-lock.json,target=package-lock.json \
+    --mount=type=cache,target=/root/.npm \
+    npm ci --omit=dev
+USER node
+COPY . .
+EXPOSE 3000
+CMD node index.js
+```
+
+**Principais pontos:**
+- Uso de `ENV` para definir o ambiente de produção.
+- Instalação de dependências usando `npm ci` para builds reprodutíveis.
+- Usuário não privilegiado para execução.
+
+---
+
+### Análise do `compose.yaml` Node.js
+
+```yaml
+services:
+  server:
+    build:
+      context: .
+    environment:
+      NODE_ENV: production
+    ports:
+      - 3000:3000
+```
+
+- **`environment`**: Define variáveis de ambiente.
+- **`ports`**: Mapeia a porta 3000 do host para o container.
+
+---
+
+## 4. Projeto de Propósito Geral com `docker init`
+
+Para projetos sem uma linguagem específica, o `docker init` oferece um template básico.
+
+### Passo a Passo:
+
+1. **Execute `docker init`:**
+
+    ```bash
+    docker init
+    ```
+
+    **Durante a interação:**
+    - `Select the application platform`: Other
+    - `Name of the service`: (padrão)
+    - `Would you like to include Compose files?`: Yes
+
+---
+
+### Análise detalhada do Dockerfile Propósito Geral
+
+```dockerfile
+FROM alpine:latest AS base
+RUN echo -e '#!/bin/sh\n\
+echo Hello world from $(whoami)! In order to get your application running in a container, take a look at the comments in the Dockerfile to get started.'\
+> /bin/hello.sh
+RUN chmod +x /bin/hello.sh
+FROM base AS final
+ARG UID=10001
+RUN adduser --disabled-password --uid "${UID}" appuser
+USER appuser
+COPY --from=build /bin/hello.sh /bin/
+ENTRYPOINT [ "/bin/hello.sh" ]
+```
+
+---
+
+## 5. Entendendo o Uso de Secrets no `docker-compose.yml`
+
+### Exemplo de `compose.yaml` com Secrets:
+
+```yaml
+services:
+  db:
+    image: postgres
+    secrets:
+      - db-password
+    environment:
+      - POSTGRES_PASSWORD_FILE=/run/secrets/db-password
+secrets:
+  db-password:
+    file: db/password.txt
+```
+
+**Principais pontos:**
+- **`secrets`**: Facilita a gestão de credenciais.
+- **Limitações no Docker Compose**: Não oferece criptografia como no Docker Swarm.
+
+---
 ```
