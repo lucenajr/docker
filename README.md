@@ -386,3 +386,304 @@ Containers podem ser conectados a várias redes, permitindo comunicação seleti
 
 Este capítulo fornece uma base sólida para o uso de redes no Docker, abordando desde configurações básicas até práticas avançadas de gerenciamento e segurança.
 ```
+
+
+```markdown
+# Resumo do Capítulo
+
+## 1. Introdução ao Docker Compose
+
+O Docker Compose é uma ferramenta para definir e executar aplicações Docker multicontainer. Ele utiliza um arquivo YAML para configurar serviços e, com um único comando, cria e inicia os containers definidos.
+
+### História
+- **Docker Compose V1**: Lançado em 2014 como ferramenta separada.
+- **Docker Compose V2+**: Integrado ao Docker CLI com melhorias de desempenho.
+
+### Por que usar o Docker Compose?
+- **Simplicidade**: Gerencia múltiplos containers com facilidade.
+- **Reprodutibilidade**: Configuração e compartilhamento simplificados.
+- **Escalabilidade**: Facilita o escalonamento de serviços.
+
+---
+
+## 2. Criando os Primeiros Serviços
+
+### Aplicação Node.js
+#### Estrutura de Arquivos
+- **Diretório:** `./node/`
+  - Dockerfile
+  - index.js
+  - package.json
+  - .env
+  - .dockerignore
+
+#### Código da Aplicação (`index.js`)
+```javascript
+const mongoose = require("mongoose");
+
+mongoose
+  .connect("mongodb://mongo:27017/test")
+  .then(() => console.log("Connected to MongoDB!"))
+  .catch((err) => console.log(err));
+```
+
+#### Dockerfile
+```dockerfile
+FROM node:lts-alpine
+WORKDIR /app
+COPY package*.json .
+RUN npm install
+COPY . .
+CMD ["node", "index.js"]
+```
+
+#### Configuração no `docker-compose.yml`
+```yaml
+services:
+  nodeapp:
+    build:
+      context: ./node
+      dockerfile: Dockerfile
+```
+
+### Servidor Nginx
+#### Estrutura de Arquivos
+- **Diretório:** `./nginx-html/`
+  - index.html
+
+#### Arquivo `index.html`
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Nginx Container</title>
+</head>
+<body>
+    Hello World
+</body>
+</html>
+```
+
+#### Configuração no `docker-compose.yml`
+```yaml
+services:
+  nginx:
+    image: nginx:latest
+    ports:
+      - "8080:80"
+```
+
+---
+
+## 3. Definindo Dependências e Healthchecks
+
+### Serviço MongoDB com Healthcheck
+```yaml
+services:
+  mongo:
+    image: mongo:latest
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      retries: 5
+      start_period: 10s
+      timeout: 5s
+```
+
+### Configuração `depends_on`
+```yaml
+services:
+  nodeapp:
+    depends_on:
+      mongo:
+        condition: service_healthy
+```
+
+---
+
+## 4. Trabalhando com Volumes e Bind Mounts
+
+### Persistindo Dados com Volumes
+```yaml
+services:
+  mongo:
+    volumes:
+      - mongo_data:/data/db
+
+volumes:
+  mongo_data:
+```
+
+### Utilizando Bind Mounts
+```yaml
+services:
+  nodeapp:
+    volumes:
+      - ./node:/app
+```
+
+---
+
+## 5. Variáveis de Ambiente e Arquivo `.env`
+
+### Usando `environment`
+```yaml
+services:
+  nodeapp:
+    environment:
+      - MY_VAR=123456
+```
+
+### Usando Arquivo `.env`
+- **Arquivo:** `./node/.env`
+  ```env
+  API_KEY=abcdef12345
+  ```
+
+```yaml
+services:
+  nodeapp:
+    env_file:
+      - ./node/.env
+```
+
+---
+
+## 6. Gerenciando Redes no Docker Compose
+
+### Criando Redes
+```yaml
+networks:
+  backend:
+  db-net:
+  frontend:
+```
+
+### Conectando Serviços às Redes
+```yaml
+services:
+  nodeapp:
+    networks:
+      - backend
+      - db-net
+
+  mongo:
+    networks:
+      - db-net
+
+  nginx:
+    networks:
+      - frontend
+```
+
+---
+
+## 7. Utilizando `extra_hosts`
+```yaml
+services:
+  nodeapp:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+```
+
+---
+
+## 8. Introdução ao Compose Watch
+
+### Configurando `compose-watch`
+```yaml
+services:
+  nodeapp-watch:
+    build:
+      context: ./node
+      dockerfile: Dockerfile
+    develop:
+      watch:
+        - path: ./node
+          target: /app
+          action: sync
+          ignore:
+            - "./node/node_modules"
+        - path: ./node/package.json
+          action: rebuild
+        - path: ./node/index.js
+          target: /app/index.js
+          action: sync+restart
+```
+
+---
+
+## 9. Arquivo `docker-compose.yml` Completo
+```yaml
+services:
+  nodeapp:
+    build:
+      context: ./node
+      dockerfile: Dockerfile
+    depends_on:
+      mongo:
+        condition: service_healthy
+    environment:
+      - MY_VAR=123456
+    env_file:
+      - ./node/.env
+    volumes:
+      - ./node:/app
+    networks:
+      - backend
+      - db-net
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  nodeapp-watch:
+    build:
+      context: ./node
+      dockerfile: Dockerfile
+    develop:
+      watch:
+        - path: ./node
+          target: /app
+          action: sync
+          ignore:
+            - "./node/node_modules"
+        - path: ./node/package.json
+          action: rebuild
+        - path: ./node/index.js
+          target: /app/index.js
+          action: sync+restart
+    networks:
+      - backend
+      - db-net
+
+  nginx:
+    image: nginx:latest
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx-html:/usr/share/nginx/html
+    networks:
+      - frontend
+
+  mongo:
+    image: mongo:latest
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      retries: 5
+      start_period: 10s
+      timeout: 5s
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - db-net
+
+volumes:
+  mongo_data:
+
+networks:
+  db-net:
+  backend:
+  frontend:
+```
+```
