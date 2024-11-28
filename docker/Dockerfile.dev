@@ -1,0 +1,5 @@
+FROM node:22.8.0-slim
+
+RUN apt update && \
+    apt install -y curl && \
+    apt install -g nodemon
