@@ -1,0 +1,47 @@
+services:
+  web:
+  
+    build:
+      args: 
+        - NODEMON_VERSION=${NODEMON_VERSION:-3.1.7}
+      context: .
+      dockerfile: Dockerfile.dev
+    image: lucenajr/web
+    container_name: web
+    env_file:
+      - .env
+      # - path: .env.override
+      #   required: false
+    volumes:
+      - .:/home/node/app
+    extra_hosts: 
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "3000:3000"
+    depends_on:
+       db:
+        condition: service_healthy
+        # restart: true
+    networks:
+      - external-api_default 
+    
+    
+  db:
+    image: mysql:8.0.30
+    container_name: db
+    # restart: on-failure:5 | always
+    environment:
+      MYSQL_DATABASE: my_database
+      MYSQL_ROOT_PASSWORD: root
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - external-api_default 
+
+networks:
+  external-api_default :
+    external: true

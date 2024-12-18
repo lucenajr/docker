@@ -1,0 +1,42 @@
+FROM node:22.8.0-slim
+
+ARG NODEMON_VERSION=${NODEMON_VERSION}
+
+RUN apt update && \
+    apt install -y curl && \
+    npm install -g nodemon@${NODEMON_VERSION}
+
+
+
+# Debian
+# RUN useradd -m -u 1000 xpto
+
+# Alpine
+# RUN useradd -D -u 1000 xpto
+
+COPY start.sh /
+
+RUN chmod +x /start.sh
+
+USER node
+
+WORKDIR /home/node/app
+
+# COPY package.json ./
+
+
+# Working with node_modules cache
+# COPY package.json ./home/node/cache
+# RUN cd /home/node/cache && npm install
+
+# COPY /home/node/cache /home/node/app - rsync . 
+
+# https://youtu.be/fC7ZDGHpTUQ?si=ymlIbbioNLrf2l08  -> Estratégias para melhorar performance em sincronização de arquivos
+
+# RUN npm install
+
+
+
+EXPOSE 3000
+
+CMD [ "/start.sh" ]
